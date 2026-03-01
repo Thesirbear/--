@@ -12,6 +12,8 @@
 #include <iostream>
 #endif
 
+namespace UserVector {
+
 template <class T>
 class Vector {
    private:
@@ -25,7 +27,7 @@ class Vector {
 
     Vector() : size_(0), load_factor_(1.0), capacity_(0), memory_(nullptr) {}
 
-    Vector(Vector&& other) : Vector() {
+    Vector(Vector&& other) noexcept : Vector() {
         if (this != &other) {
             memory_ = std::move(other.memory_);
             size_ = other.size_;
@@ -94,7 +96,7 @@ class Vector {
             throw std::out_of_range("Position is out of bounds.");
         }
         size_++;
-        if (size_ > capacity_) {
+        if (size_ >= capacity_) {
             Reserve(Count_capacity(size_));
         }
         for (size_t pos_ = size_ - 1; pos_ > pos; --pos_) {
@@ -125,7 +127,7 @@ class Vector {
             throw std::out_of_range("Position is out of bounds.");
         }
         size_++;
-        if (size_ > capacity_) {
+        if (size_ >= capacity_) {
             Reserve(Count_capacity(size_));
         }
         for (size_t pos_ = size_ - 1; pos_ > pos; --pos_) {
@@ -194,7 +196,7 @@ class Vector {
     }
 
     void Resize(size_t size, T default_value) {
-        if (size > capacity_) {
+        if (size >= capacity_) {
             Reserve(Count_capacity(size));
             size_ = size;
         }
@@ -203,7 +205,7 @@ class Vector {
     }
 
     void Resize(size_t size) {
-        if (size > capacity_) {
+        if (size >= capacity_) {
             Reserve(Count_capacity(size));
         }
         size_ = size;
@@ -255,5 +257,6 @@ class Vector {
         return static_cast<int>(size * (1 + load_factor_));
     }
 };
+}  // namespace UserVector
 
 #endif
