@@ -1,17 +1,30 @@
 #pragma once
 
 #include <cstddef>
-#include <any>
+#include <utility>
+#include <memory>
+#include "folly/Poly.h"
 
-namespace LrSchedule {
-    class LrScheduleBase {
-        public:
-            virtual std::any Get_lr(size_t iter) = 0;
-            virtual ~LrScheduleBase() = default;
+namespace LrSchedulesClass {
+
+    namespace LrScheduleBaseDetails {
+        template<typename T>
+        struct LrScheduleBase {
+
+            template<class Base>
+            struct Interface : Base {
+                T Get_lr(size_t iter) {
+                    return folly::poly_call<0>(*this, iter);
+                }
+            };
+
+            template<typename V>
+            using Members = folly::PolyMembers<&V::Get_lr>;
+        };
     };
 
     template<typename T>
-    class LrConstant : public LrScheduleBase {
+    class LrConstant {
         private:
             T lr_;
 
@@ -25,7 +38,7 @@ namespace LrSchedule {
     };
 
     template<typename T>
-    class TimeDecayLR : public LrScheduleBase{
+    class TimeDecayLR {
         private:
             T s0;
             T p;
@@ -61,8 +74,11 @@ namespace LrSchedule {
                 precision_(precision)
             {}
 
-            T Get_lr(size_t iter) override  {
+            T Get_lr(size_t iter) {
                 return lambda_ * count_pow(s0 / (s0 + static_cast<T>(iter)));
             }
     };
-}
+
+    template<typename T>
+    using LrSchedule = folly::Poly<LrScheduleBaseDetails::LrScheduleBase<T>>;
+};

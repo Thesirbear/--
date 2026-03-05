@@ -1,46 +1,85 @@
 #pragma once
 
-#include "eigen/Eigen/Core"
-#include "lossfunc.hpp"
+#include "eigen/Core"
+#include "folly/Poly.h"
 #include <random>
-#include <any>
 #include <memory>
 
 #ifdef Debug
     #include <iostream>
 #endif
 
-namespace Block {
 
-    using Loss = LossFunctions::LossFunctionBase;
+namespace BlockClass {
+
     using Generator = std::mt19937_64;
     enum Rows : size_t;
     enum Cols : size_t;
 
-    class BlockBase {
+    namespace BlockBaseDetails {
+        template<typename T>
+        struct BlockBase {
+            using Matrix = Eigen::MatrixX<T>;
+            template<class Base>
+            struct Interface : Base {
+                Matrix predict(Matrix& X) const {
+                    return folly::poly_call<0>(*this, X);
+                }
 
-            virtual void predict() = 0;
+                Matrix forward(Matrix& X) const {
+                    return folly::poly_call<1>(*this, X);
+                }
+            };
 
-            virtual void forward() = 0;
+            template<typename V>
+            using Members = folly::PolyMembers<&V::predict, &V::forward>;
+        };
 
-            virtual void backward() = 0;
+        template<typename T>
+        struct BlockBaseLinear : folly::PolyExtends<BlockBase<T>> {
+            using Matrix = Eigen::MatrixX<T>;
+            template<class Base>
+            struct Interface : Base {
+                void update(Matrix& X) {
+                    folly::poly_call<0>(*this, X);
+                }
 
-            virtual void update() = 0;
+                Matrix GetWeight() const {
+                    return folly::poly_call<1>(*this);
+                }
+            };
 
-            virtual std::any GetWeight() = 0;
-        
-            virtual ~BlockBase() = default;
-        private:
+            template<typename V>
+            using Members = folly::PolyMembers<&V::update, &V::GetWeight>;
+        };
+
+        template<typename T>
+        struct BlockBaseNonLinear : folly::PolyExtends<BlockBase<T>> {
+            using Matrix = Eigen::MatrixX<T>;
+            template<class Base>
+            struct Interface : Base {
+                void backward(Matrix& X) {
+                    folly::poly_call<0>(*this, X);
+                }
+            };
+
+            template<typename V>
+            using Members = folly::PolyMembers<&V::backward>;
+        };
     };
 
     template<typename T>
-    class Linear_Block : public BlockBase {
+    struct Linear_Block {
+
+        using Matrix = Eigen::MatrixX<T>;
         public:
+
+            Linear_Block() {}
 
             Linear_Block(Rows x, Cols y, Generator& rng) {
                 assert(x != 0 && y != 0);
 
-                weight_ = Eigen::MatrixX<T>(x, y);
+                weight_ = Matrix(x, y);
 
                 for (size_t i = 0; i < x; i++) {
                     for (size_t j = 0; j < y; j++) {
@@ -49,62 +88,57 @@ namespace Block {
                 }
             }
 
-            // Внутри unique_ptr копировать нельзя.
-            Linear_Block(Linear_Block<T>& other) = delete;
-
-
-            Linear_Block operator=(Linear_Block<T>&& other) noexcept {
+            Linear_Block& operator=(Linear_Block<T>&& other) {
                 return std::move(other);
             }
-
-
-            Linear_Block(Linear_Block<T>&& other) {
-                weight_ = std::move(other.weight_);
-                Loss_ = std::move(other.Loss_);
-                uni_ = std::move(other.uni_);
+            Linear_Block& operator=(const Linear_Block<T>& other) {
+                return other;
             }
+            Linear_Block(const Linear_Block<T>& other) = default;
+            Linear_Block(Linear_Block<T>&& other) = default;
+            ~Linear_Block() = default;
 
-            template<typename U>
-            Eigen::MatrixX<T> predict(Eigen::MatrixBase<U>& X) {
+            Matrix predict(Matrix& X) const {
                 return X * weight_;
             }
 
-            template<typename U>
-            Eigen::MatrixX<T> forward(Eigen::MatrixBase<U>& X) {
-                cache_ = X;
-                return X*weight_;
+            Matrix forward(Matrix& X) const {
+                return X * weight_;
             }
 
-            template<typename U>
-            Eigen::MatrixX<T> backward(Eigen::MatrixBase<U>& Cur_Grad) {
-                return Loss_->Gradient(cache_, Cur_Grad, weight_);
+            void update(Matrix& grad) {
+                weight_ -= grad;
             }
 
-            template<typename U>
-            void update(T lr, Eigen::MatrixBase<U>& grad) {
-                weight_ -= lr * grad;
-            }
-
-            Eigen::MatrixX<T> GetWeight() {
+            Matrix GetWeight() const {
                 return weight_;
             }
         
         private:
-            Eigen::MatrixX<T> weight_;
-            Eigen::MatrixX<T> cache_;
-            std::unique_ptr<Loss> Loss_;
+            Matrix weight_;
             std::uniform_real_distribution<float> uni_{-1, 1};
     };
 
-
     template<typename T>
-    class Relu : public BlockBase {
+    class LRelu {
+        using Matrix = Eigen::MatrixX<T>;
         public:
 
-            Relu(float alpha) : alpha_(alpha) {}
+            LRelu& operator=(LRelu<T>&& other) noexcept {
+                return std::move(other);
+            }
 
-            template<typename U>
-            Eigen::MatrixX<T> predict(Eigen::MatrixX<U>& X) {
+            LRelu& operator=(const LRelu<T>& other) {
+                return other;
+            }
+            
+            LRelu(const LRelu<T>& other) = default;
+            LRelu(LRelu<T>&& other) = default;
+            ~LRelu() = default;
+
+            LRelu(float alpha) : alpha_(alpha) {}
+
+            Matrix predict(Matrix& X) const {
                 for (int i = 0; i < X.rows(); i++) {
                     for (int j = 0; j < X.cols(); j++) {
                         if (X(i, j) <= 0.0) {
@@ -115,14 +149,12 @@ namespace Block {
                 return X;
             }
             
-            template<typename U>
-            Eigen::MatrixX<T> forward(Eigen::MatrixX<U>& X) {
-                return cache_ = predict(X);
+            Matrix forward(Matrix& X) const {
+                return predict(X);
             }
 
-            template<typename U>
-            Eigen::MatrixX<T> backward(Eigen::MatrixBase<U>& Cur_Grad) {
-                // magic with loss function
+            // this function change Cur_grad!!!
+            void backward(Matrix& Cur_Grad) {
                 for (int i = 0; i < Cur_Grad.rows(); i++) {
                     for (int j = 0; j < Cur_Grad.cols(); j++) {
                         if (Cur_Grad(i, j) <= 0.0) {
@@ -132,11 +164,16 @@ namespace Block {
                         }
                     }
                 }
-                return cache_.transpose()*Cur_Grad;
             }
         
         private:
             float alpha_;
-            Eigen::MatrixX<T> cache_;
     };
-}
+
+    template<typename T>
+    using BlockLinear = folly::Poly<BlockBaseDetails::BlockBaseLinear<T>>;
+
+    template<typename T>
+    using BlockNonLinear = folly::Poly<BlockBaseDetails::BlockBaseNonLinear<T>>;
+
+};

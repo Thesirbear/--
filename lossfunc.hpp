@@ -1,32 +1,47 @@
 #pragma once 
 
-#include "eigen/Eigen/Core"
-#include <any>
+#include "eigen/Core"
+#include "folly/Poly.h"
 
-namespace LossFunctions {
+namespace LossFunctionsClass {
 
-    class LossFunctionBase {
-        public:
-            virtual std::any Gradient() = 0;
-            virtual std::any Loss() = 0;
-            virtual ~LossFunctionBase() = default;
+    namespace LossBaseDetails {
+        template<typename T>
+        struct LossFunctionBase {
+
+            using Matrix = Eigen::MatrixX<T>;
+
+            template<class Base>
+            struct Interface : Base {
+                Matrix Gradient(Matrix& cur, Matrix& grad, Matrix& w) {
+                    return folly::poly_call<0>(*this, cur, grad, w);
+                }
+
+                Matrix Loss(Matrix& cur, Matrix& grad, Matrix& w) {
+                    return folly::poly_call<1>(*this, cur, grad, w);
+                }
+            };
+
+            template<typename V>
+            using Members = folly::PolyMembers<&V::Gradient, &V::Loss>;
+        };
     };
 
     template<typename T>
-    class Loss_Mse : public LossFunctionBase {
+    class Loss_Mse {
         public:
 
             using matrix = Eigen::MatrixX<T>;
 
-            template<typename U>
-            std::any Gradient(matrix& X, Eigen::MatrixBase<U>& Y, matrix& W) {
+            matrix Gradient(matrix& X, matrix& Y, matrix& W) {
                 return 2.0/static_cast<T>(Y.rows())*X.transpose()*(X*W - Y);
             }
 
-            template<typename U>
-            std::any Loss(matrix& X, Eigen::MatrixBase<U>& Y, matrix& W) {
+            matrix Loss(matrix& X, matrix& Y, matrix& W) {
                 return 1.0/static_cast<T>(Y.rows())*(X*W - Y).transpose()*(X*W - Y);
             }
     };
 
+    template<typename T>
+    using LossFunction = folly::Poly<LossBaseDetails::LossFunctionBase<T>>;
 }

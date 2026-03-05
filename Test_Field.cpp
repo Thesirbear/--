@@ -1,23 +1,22 @@
-#include "Schema.hpp"
-#include "eigen/Eigen/Core"
+#include "block.hpp"
+#include "eigen/Core"
 
+#include "folly/Poly.h"
+
+#include "Optimizer.hpp"
+#include "lossfunc.hpp"
 #include "Hyperparameter.hpp"
 #include "LrScheduler.hpp"
-#include "Optimizer.hpp"
-#include "block.hpp"
-#include "lossfunc.hpp"
-#include "Schema.hpp"
+
+// Tests
+#include "TestBlock.cpp"
 
 #include <ctime>
-#include <iomanip>
 #include <iostream>
 
 #include <random>
-#include <chrono>
-#include "vector.hpp"
-#include <cmath>
-#include <any>
-#include <memory>
+#include "folly/Poly.h"
+
 
 #ifdef Debug
     #define Line std::cout << __LINE__ << "\n"
@@ -29,19 +28,23 @@ std::uniform_real_distribution<float> distribution{0.0, 1.0};
 std::normal_distribution<float> distr_norma;
 std::mt19937_64 rnd;
 
+
+
 bool CheckLinearRegression() {
+    using namespace BlockClass;
     // Main variables
     using skalar = float;
-    using Hparam = HyperParameter::HyperParameter<skalar>;
+    using Hparam = HyperParameters::HyperParameter<skalar>;
 
-    size_t train_size = 100;
+    size_t train_size = 200;
     size_t poly = 7;
 
     Hparam param;
-    param.lr = 3e-4;
-    param.iter = 300;
-    param.lr_scheduler = std::make_unique<LrSchedule::TimeDecayLR<float>>();
-    param.loss = std::make_unique(LossFunctions::Loss_Mse<float> mse);
+    param.lr = 2;
+    param.iter = 1000;
+    param.lr_scheduler = LrSchedulesClass::TimeDecayLR<float>(param.lr, 300);
+    param.loss = LossFunctionsClass::Loss_Mse<float>();
+
     std::vector<std::pair<skalar, skalar>> GenData(train_size);
 
     auto func = [&](skalar x)  {
@@ -55,9 +58,9 @@ bool CheckLinearRegression() {
     }
 
 // preparing GenData
-    using MatrixXf = Eigen::MatrixXf;
-    Eigen::MatrixXf X(GenData.size(), poly + 1);
-    Eigen::MatrixXf Y(GenData.size());
+    using Matrix = Eigen::MatrixX<skalar>;
+    Matrix X(GenData.size(), poly + 1);
+    Matrix Y(GenData.size(), 1);
 
     for (size_t j = 0; j < GenData.size(); j++) {
         Y(j) = GenData[j].second;
@@ -68,26 +71,40 @@ bool CheckLinearRegression() {
                 X(j, k) = X(j, k - 1) * GenData[j].first;
             }
         }
-        X(j, 7) = 1;
+        X(j, poly) = 1;
     }
 
-    using Block::Rows;
-    using Block::Cols;
+    BlockLinear<skalar> B = Linear_Block<skalar>(Rows{poly + 1}, Cols{1}, rnd);
 
-    NeuralSchema::Schema<float> Schematic (NeuralSchema::SchemaBuilder<float>().LinearLayer(Rows{poly + 1}, Cols{1}, rnd));
+    
+    std::vector<skalar> loss_history;
+    loss_history.push_back((B.GetWeight().transpose()*B.GetWeight()).value());
+    Optimizer::Optimizer<skalar> optim;
+    {
+        Matrix state = B.GetWeight();
+        optim = Optimizer::VanillaGradient<skalar>(param.iter, 1e-12, param.lr_scheduler, state);
+    }
+    while (optim.DoNextStepOfOptimizer(loss_history)) {
+        Matrix cur_weight = B.GetWeight();
+        Matrix grad = param.loss.Gradient(X, Y, cur_weight);
+        Matrix modifi_grad = optim.update_weight(grad);
+        B.update(modifi_grad);
+        loss_history.push_back((grad.transpose()*grad).value());
+        // std::cout << loss_history.back() << "\n";
+        optim.StepOver(std::move(grad));
+    }
 
-    Optimizer::BaseOptimizer<skalar> optim(X, Y, Schematic, mse, param);
-
-    Eigen::MatrixXf y(1, poly + 1);
+    Matrix y(1, poly + 1);
     y(0, 0) = 0.5;
     for (size_t pos = 1; pos <= poly; pos++) y(0, pos) = y(0, pos - 1) * 0.5; 
     y(0, poly) = 1;
 
     std::cout << B.GetWeight() << "\n";
-    Eigen::MatrixXf ans = B.predict(y);
+    Matrix ans = B.predict(y);
     std::cout << ans << " " << std::cos(1.5*M_PI*0.5) << "\n";
     return true;
 }
+
 
 int main(int argc, char* argv[]) {
     std::ios_base::sync_with_stdio(0);
@@ -106,8 +123,11 @@ int main(int argc, char* argv[]) {
         std::cout << seed << "\n";
     }
 
-    std::cout << std::fixed << std::setprecision(16);
+    std::cout << std::fixed;
 
+    TestBlock();
+
+    CheckLinearRegression();
 
     return 0;
 }

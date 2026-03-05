@@ -1,18 +1,19 @@
 #pragma once
 
-
-#include <any>
+#include <cstddef>
 #include "LrScheduler.hpp"
 #include "lossfunc.hpp"
 
-namespace HyperParameter {
+namespace HyperParameters {
 
+    using namespace LrSchedulesClass;
+    using namespace LossFunctionsClass;
     template<typename T>
     struct HyperParameter {
-        int iter;
+        size_t iter;
         T lr;
-        std::unique_ptr<LossFunctions::LossFunctionBase> loss;
-        std::unique_ptr<LrSchedule::LrScheduleBase> lr_scheduler;
+        LossFunction<T> loss;
+        LrSchedule<T> lr_scheduler;
     };
 
 };
