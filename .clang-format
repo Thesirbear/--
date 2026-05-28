@@ -4,7 +4,7 @@ BasedOnStyle: Google
 IndentWidth: 4
 ContinuationIndentWidth: 4
 UseTab: Never
-
+InsertNewlineAtEOF: true
 
 IndentCaseLabels: true
 ReflowComments: true
