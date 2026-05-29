@@ -40,8 +40,8 @@ class LinearBlock {
     const MatrixX<T>& get_db() const { return db_; }
 
     void update_params(const MatrixX<T>& dW, const MatrixX<T>& db) {
-        W_ -= dW;
-        b_ -= db;
+        W_.noalias() -= dW;
+        b_.noalias() -= db;
     }
 
     void set_params(const MatrixX<T>& W, const MatrixX<T>& b) {

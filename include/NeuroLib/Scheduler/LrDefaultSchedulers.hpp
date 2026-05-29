@@ -1,46 +1,38 @@
 #include <cstddef>
+#include <algorithm>
+#include <cmath>
 
 namespace LrSchedulesClass::default_impl {
 template <typename T>
 class LrConstant {
-   private:
+private:
     T lr_;
 
-   public:
+public:
     LrConstant() : lr_(1) {}
     LrConstant(T lr) : lr_(lr) {}
     T Get_lr(size_t iter) { return lr_; }
 };
 
 template <typename T>
-class TimeDecayLR {
-   private:
-    T s0;
-    T p;
-    T lambda_;
-    size_t precision_;
-
-    T count_pow(T x) {
-        T l = 0, r = 100;
-        for (size_t i = 0; i < precision_; i++) {
-            T mid = (l + r) / 2;
-            if (x - mid * mid > 1e-12) {
-                l = mid;
-            } else {
-                r = mid;
-            }
-        }
-        return l;
-    }
-
-   public:
-    TimeDecayLR() : s0(1), p(0.5), lambda_(1), precision_(100) {}
-
-    TimeDecayLR(T lambda, T precision, T s0 = 1, T p = 0.5)
-        : s0(s0), p(p), lambda_(lambda), precision_(precision) {}
+class StepLR {
+    public:
+    StepLR(T alpha = 0.1, T n = 100, T d = 0.1, T min = T(1e-4)) : alpha_(alpha), n_(n), d_(d), min_(min), i_(0) {}
 
     T Get_lr(size_t iter) {
-        return lambda_ * count_pow(s0 / (s0 + static_cast<T>(iter)));
+        if (i_ == n_) {
+            alpha_ *= d_;
+            i_ = 0;
+        }
+        i_++;
+        return std::max({min_, alpha_});
     }
+
+    private:
+        std::size_t n_;
+        std::size_t i_;
+        T alpha_;
+        T min_;
+        T d_;
 };
 }  // namespace LrSchedulesClass::default_impl

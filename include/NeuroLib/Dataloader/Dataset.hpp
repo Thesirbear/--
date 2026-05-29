@@ -61,6 +61,10 @@ class Dataset {
         return Iterator{this, static_cast<std::size_t>(X_.cols())};
     }
 
+    std::size_t size() {
+        return X_.rows();
+    }
+
    private:
     void shuffle_() {
         for (std::size_t i = X_.cols() - 1; i > 0; --i) {

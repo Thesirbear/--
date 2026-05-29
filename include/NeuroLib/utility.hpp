@@ -1,5 +1,6 @@
 #pragma once
 
+#include <complex>
 #include "Eigen/Core"
 #include "EigenRand/EigenRand"
 #include "folly/Poly.h"
@@ -35,11 +36,25 @@ using PolyExtends = folly::PolyExtends<T...>;
 
 using rnd = Eigen::Rand::Vmt19937_64;
 
+
+template <typename T>
+MatrixX<T> normal_init(Eigen::Index rows, Eigen::Index cols, rnd& rng, T mean = T(0), T std = T(0.5)) {
+    Eigen::Rand::NormalGen<T> gen{mean, std};
+    return gen.template generate<MatrixX<T>>(rows, cols, rng);
+}
+
+
+template<typename T>
+MatrixX<T> uniform_init(Eigen::Index rows, Eigen::Index cols, rnd& rng, T mean = T(0), T std = T(0.5)) {
+    Eigen::Rand::UniformRealGen<T> gen{mean, std};
+    return gen.template generate<MatrixX<T>>(rows, cols, rng);
+}
+
+
 template <typename T>
 MatrixX<T> xavier_init(Eigen::Index rows, Eigen::Index cols, rnd& rng) {
     T std = std::sqrt(T(2) / static_cast<T>(rows + cols));
-    Eigen::Rand::NormalGen<T> gen{T(0), std};
-    return gen.template generate<MatrixX<T>>(rows, cols, rng);
+    return normal_init<T>(rows, cols, rng, T(0), std);
 }
 
 // Project defined utils section

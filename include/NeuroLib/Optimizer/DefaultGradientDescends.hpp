@@ -82,13 +82,16 @@ class Adam {
             jump_coef1_ = MatrixX<T>::Zero(grad.rows(), grad.cols());
             jump_coef2_ = MatrixX<T>::Zero(grad.rows(), grad.cols());
         }
+        if (0 < t_ and t_ < 1000) {
+            alpha1_ *= alpha1_;
+        }
         ++t_;
         jump_coef1_.array() =
             alpha1_ * jump_coef1_.array() + (T(1) - alpha1_) * grad.array();
         jump_coef2_.array() = alpha2_ * jump_coef2_.array() +
                               (T(1) - alpha2_) * grad.array().square();
-        return ((jump_coef1_.array() / (1 - binpow(alpha1_, t_))) /
-                ((jump_coef2_.array() / (1 - binpow(alpha2_, t_)))
+        return ((jump_coef1_.array() / (1 - alpha1_)) /
+                ((jump_coef2_.array() / (1 - alpha2_))
                      .array()
                      .sqrt() +
                  eps_))
