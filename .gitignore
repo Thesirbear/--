@@ -1,0 +1,9 @@
+*.exe
+*.o
+build/
+build_asan/
+*.out
+outs/
+*.cmake
+.vscode
+.cache

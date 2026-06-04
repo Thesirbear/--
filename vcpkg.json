@@ -1,0 +1,8 @@
+{
+  "name": "neuro",
+  "version": "0.0.1",
+  "dependencies": [
+    "folly",
+    "eigen3"
+  ]
+}
